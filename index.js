@@ -27,6 +27,19 @@ const subscribe = (socket, next) => {
   next();
 };
 
+
+const onTyping = (socket, next) => {
+  socket.on("emitOnTyping", (payload) => {
+    if (payload !== undefined) {
+      const {user,room} = payload;
+      socket.sockets.in(room).emit('onTyping', user)
+      console.log('onTyping')
+    }
+  });
+  next();
+};
+
+
 const handshake = (socket, next) => {
   if (socket.handshake.query && socket.handshake.query.token) {
     const upsServices = getUpServices(strapi);
@@ -87,6 +100,7 @@ const StrapIO = (strapi, options) => {
   // loading middleware ordered
   io.use(handshake);
   io.use(subscribe);
+  io.use(onTyping);
 
   // debugging
   if(process.env.DEBUG == "strapio" || process.env.DEBUG == "*") {
