@@ -30,10 +30,13 @@ const subscribe = (socket, next) => {
 
 const onTyping = (socket, next) => {
   socket.on("emitOnTyping", (payload) => {
-    if (payload !== undefined) {
-      const {user,room} = payload;
-      socket.sockets.in(room).emit('onTyping', user)
-      console.log('onTyping')
+    if (payload !== undefined && payload !== "") {
+      console.log(payload)
+      const  {user, room} = JSON.parse(payload);
+      if (user && room) {
+        socket.broadcast.to(room).emit('onTyping', user)
+      }
+      console.log('onTyping', user, room)
     }
   });
   next();
