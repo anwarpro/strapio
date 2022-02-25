@@ -1,9 +1,10 @@
 /*  Helper Functions  */
 
 const sendDataBuilder = (identity, entity) => {
-  return Array.isArray(entity)
-    ? JSON.stringify({ identity: identity.toLowerCase(), entity })
-    : JSON.stringify({ identity: identity.toLowerCase(), ...entity });
+  return Array.isArray(entity) ? JSON.stringify({
+    identity: identity.toLowerCase(),
+    entity
+  }) : JSON.stringify({identity: identity.toLowerCase(), ...entity});
 };
 
 const getUpServices = (strapi) => strapi.plugins["users-permissions"].services;
@@ -18,10 +19,7 @@ const subscribe = (socket, next) => {
   socket.on("subscribe", (payload) => {
     if (payload !== undefined && payload !== "") {
       socket.join(payload.toLowerCase());
-      sendMessageToSocket(
-        socket,
-        "Successfully joined: " + payload.toLowerCase()
-      );
+      sendMessageToSocket(socket, "Successfully joined: " + payload.toLowerCase());
     }
   });
   next();
@@ -32,7 +30,7 @@ const onTyping = (socket, next) => {
   socket.on("emitOnTyping", (payload) => {
     if (payload !== undefined && payload !== "") {
       console.log(payload)
-      const  {user, room} = JSON.parse(payload);
+      const {user, room} = JSON.parse(payload);
       if (user && room) {
         socket.broadcast.to(room).emit('onTyping', user)
       }
@@ -51,9 +49,26 @@ const handshake = (socket, next) => {
       upsServices.user
         .fetchAuthenticatedUser(user.id)
         .then((detail) => socket.join(detail.role.name));
-    }).catch((err) => {
-      sendMessageToSocket(socket, err.message);
-      socket.disconnect()
+    }).catch(async (err) => {
+      try {
+        if (strapi.firebase) {
+          const token = socket.handshake.query.token
+          const decodedToken = await strapi.firebase
+            .auth()
+            .verifyIdToken(token);
+
+          sendMessageToSocket(socket, "handshake ok");
+
+          const {uid, email, email_verified, name, picture} = decodedToken;
+
+          upsServices.user.fetch({
+            'externalID': uid
+          }, ['role']).then((detail) => socket.join(detail.role.name));
+        }
+      } catch (err) {
+        sendMessageToSocket(socket, err.message);
+        socket.disconnect()
+      }
     });
   } else {
     sendMessageToSocket(socket, "No token given.");
@@ -70,17 +85,9 @@ const emit = (upsServices, io) => {
     const roles = await upsServices.userspermissions.getRoles();
 
     for (let i in roles) {
-      const roleDetail = await upsServices.userspermissions.getRole(
-        roles[i].id,
-        plugins
-      );
+      const roleDetail = await upsServices.userspermissions.getRole(roles[i].id, plugins);
 
-      if (
-        !roleDetail.permissions.application.controllers[
-          vm.identity.toLowerCase()
-        ][action].enabled
-      )
-        return;
+      if (!roleDetail.permissions.application.controllers[vm.identity.toLowerCase()][action].enabled) return;
 
       // send to specific subscriber
       if (entity._id || entity.id) {
@@ -106,7 +113,7 @@ const StrapIO = (strapi, options) => {
   io.use(onTyping);
 
   // debugging
-  if(process.env.DEBUG == "strapio" || process.env.DEBUG == "*") {
+  if (process.env.DEBUG == "strapio" || process.env.DEBUG == "*") {
     io.on("connection", (socket) => {
       console.debug("Connected Socket:", socket.id);
       socket.on("disconnecting", (reason) => {
@@ -114,11 +121,12 @@ const StrapIO = (strapi, options) => {
       });
     });
   }
-  
+
 
   return {
     emit: emit(getUpServices(strapi), io),
     emitRaw: (room, event, data) => io.sockets.in(room).emit(event, data),
+    broadcastRaw: (room, event, data) => io.to(room).emit(event, data),
   };
 };
 
