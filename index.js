@@ -2,8 +2,7 @@
 
 const sendDataBuilder = (identity, entity) => {
   return Array.isArray(entity) ? JSON.stringify({
-    identity: identity.toLowerCase(),
-    entity
+    identity: identity.toLowerCase(), entity
   }) : JSON.stringify({identity: identity.toLowerCase(), ...entity});
 };
 
@@ -30,11 +29,15 @@ const onTyping = (socket, next) => {
   socket.on("emitOnTyping", (payload) => {
     if (payload !== undefined && payload !== "") {
       console.log(payload)
-      const {user, room} = JSON.parse(payload);
-      if (user && room) {
-        socket.broadcast.to(room).emit('onTyping', user)
+      try {
+        const {user, room} = JSON.parse(payload);
+        if (room) {
+          socket.broadcast.to(room).emit('onTyping', user)
+        }
+        console.log('onTyping', user, room)
+      } catch (err) {
+        console.log(err)
       }
-      console.log('onTyping', user, room)
     }
   });
   next();
@@ -126,7 +129,14 @@ const StrapIO = (strapi, options) => {
   return {
     emit: emit(getUpServices(strapi), io),
     emitRaw: (room, event, data) => io.sockets.in(room).emit(event, data),
-    broadcastRaw: (room, event, data) => io.to(room).emit(event, data),
+    broadcastRaw: (socketId, room, event, data) => {
+      console.log(io.sockets.sockets.get(socketId))
+      if (socketId) {
+        io.sockets.in(room).emit(event, data)
+      } else {
+        io.sockets.in(room).emit(event, data)
+      }
+    },
   };
 };
 
