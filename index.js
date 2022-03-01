@@ -132,7 +132,12 @@ const StrapIO = (strapi, options) => {
     broadcastRaw: (socketId, room, event, data) => {
       console.log(io.sockets.sockets.get(socketId))
       if (socketId) {
-        io.sockets.in(room).emit(event, data)
+        try {
+          io.sockets.sockets.get(socketId).broadcast.to(room).emit(event, data)
+        } catch (e) {
+          io.sockets.in(room).emit(event, data)
+          console.log(e)
+        }
       } else {
         io.sockets.in(room).emit(event, data)
       }
